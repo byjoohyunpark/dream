@@ -1,0 +1,115 @@
+<html>
+
+<head>
+    <title>Dream 4</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <link rel="shortcut icon" href="../asset/favicon.ico" />
+    <link rel="apple-touch-icon" href="../asset/favicon.png" />
+    <link rel="stylesheet" type="text/css" href="../src/style/style.css">
+</head>
+
+<body>
+    <script src="../src/build/three.js"></script>
+    <script src="../src/control/OrbitControls.js"></script>
+    <script src="../src/lodaer/GLTFLoader.js"></script>
+    <script src="../src/js/Detector.js"></script>
+
+    <script>
+        if (!Detector.webgl) Detector.addGetWebGLMessage();
+
+        let camera, controls, scene, renderer, geometry, mesh;
+        let sign = 0.2;
+        let materialShader;
+
+        init();
+        animate();
+
+        function init() {
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 12000);
+            camera.position.z = 1500;
+
+            let vectorCamera = new THREE.Vector3(0, 1, 0);
+            camera.getWorldDirection(vectorCamera);
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x5200ff);
+
+
+            var loader = new THREE.GLTFLoader();
+            loader.load('../src/model/LeePerrySmith/LeePerrySmith.glb', function(gltf) {
+                gltf.scene.traverse(function(node) {
+                    if (node.isMesh) mesh = node;
+                });
+                mesh.material = new THREE.MeshNormalMaterial();
+                mesh.material.onBeforeCompile = function(shader) {
+                    shader.uniforms.time = {
+                        value: 0
+                    };
+                    shader.vertexShader = 'uniform float time;\n' + shader.vertexShader;
+                    shader.vertexShader = shader.vertexShader.replace(
+                        '#include <begin_vertex>',
+                        [
+                            'float theta = sin( time + position.y ) / 2.0;',
+                            'float c = cos( theta );',
+                            'float s = sin( theta );',
+                            'mat3 m = mat3( c, 0, s, 0, 1, 0, -s, 0, c );',
+                            'vec3 transformed = vec3( position ) * m;',
+                            'vNormal = vNormal * m;'
+                        ].join('\n')
+                    );
+                    materialShader = shader;
+                };
+                mesh.material.morphTargets = true;
+                mesh.scale.setScalar(100);
+                scene.add(mesh);
+            });
+
+
+
+            renderer = new THREE.WebGLRenderer();
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.25;
+            controls.screenSpacePanning = false;
+            controls.enablePan = false;
+            controls.enableZoom = false;
+
+            window.addEventListener('resize', onWindowResize, false);
+
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            render();
+        }
+
+
+        function render() {
+            if (materialShader) {
+                materialShader.uniforms.time.value = performance.now() / 1000;
+            }
+            renderer.render(scene, camera);
+        }
+
+    </script>
+
+    <div class="ctrl">
+        <a class="prev" href="../3">&#60;</a>
+        <a class="home" href="/">&#9711;</a>
+        <a class="next" href="../5">&#62;</a>
+    </div>
+</body>
+
+</html>
