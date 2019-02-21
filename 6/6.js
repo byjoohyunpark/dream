@@ -26,6 +26,8 @@ class App {
     }
 
     init() {
+        
+        this.scene = new THREE.Scene();        
 
         this.camera = new THREE.PerspectiveCamera(25, window.innerWidth / window.innerHeight, 0.1, 1000);
         this.camera.position.x = -90; //-60
@@ -37,8 +39,6 @@ class App {
         this.controls.screenSpacePanning = false;
         this.controls.enablePan = false;
         this.controls.enableZoom = false;
-
-        this.scene = new THREE.Scene();
 
         this.resizeListener = e => this.onResize(e);
         window.addEventListener('resize', this.resizeListener, false);

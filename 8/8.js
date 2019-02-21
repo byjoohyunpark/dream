@@ -140,7 +140,7 @@ if (!Detector.webgl) Detector.addGetWebGLMessage();
              this.controls.enableZoom = false;
              this.controls.minAzimuthAngle = 0;
              this.controls.maxAzimuthAngle = 0;
-             this.controls.rotateSpeed = 0.2;
+             this.controls.rotateSpeed = 0.28;
 
              this.controls.update();
 
