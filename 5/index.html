@@ -13,95 +13,292 @@
     <script src="../src/control/OrbitControls.js"></script>
     <script src="../src/js/Detector.js"></script>
 
+    <script src="../src/shader/CopyShader.js"></script>
+    <script src="../src/shader/FXAAShader.js"></script>
+    <script src="../src/shader/HorizontalTiltShiftShader.js"></script>
+    <script src="../src/shader/VerticalTiltShiftShader.js"></script>
+
+    <script src="../src/postprocessing/EffectComposer.js"></script>
+    <script src="../src/postprocessing/RenderPass.js"></script>
+    <script src="../src/postprocessing/BloomPass.js"></script>
+    <script src="../src/postprocessing/ShaderPass.js"></script>
+    <script src="../src/postprocessing/MaskPass.js"></script>
+    <script src="../src/postprocessing/SavePass.js"></script>
+
+    <script src="../src/js/MarchingCubes.js"></script>
+    <script src="../src/js/ShaderToon.js"></script>
+    <script src="../src/js/WebGL.js"></script>
+
+    <div id="container"></div>
     <script>
-        if (!Detector.webgl) Detector.addGetWebGLMessage();
-
-        var width = window.innerWidth;
-        var height = window.innerHeight;
-
-        var renderer = new THREE.WebGLRenderer({
-            antialias: true
-        });
-        var scene = new THREE.Scene();
-        var camera = new THREE.PerspectiveCamera(75, width / height, 1, 10000);
-
-        renderer.setClearColor(new THREE.Color(0x5200ff), 1);
-
-        renderer.setSize(width, height);
-        document.body.appendChild(renderer.domElement);
-
-        scene.add(camera);
-
-        camera.position.z = -100;
-        camera.lookAt(new THREE.Vector3());
-
-        var l = 100;
-        var phi = Math.floor(Math.random() * 5) + 2;
-        var radius = 50;
-        var vertices = [];
-
-        for (var i = 0; i < l; i++) {
-
-            var pct = i / (l - 1);
-            var theta = Math.PI * 2 * pct * phi;
-
-            var taper = Math.sin(pct) * radius / 4;
-
-            var x = taper * Math.cos(theta);
-            var y = radius * EasingQuadraticIn(seat(pct)) * 2 - radius;
-            var z = taper * Math.sin(theta);
-
-            vertices.push(new THREE.Vector3(x, y, z));
-
+        if (WEBGL.isWebGLAvailable() === false) {
+            document.body.appendChild(WEBGL.getWebGLErrorMessage());
         }
+        var MARGIN = 0;
+        var SCREEN_WIDTH = window.innerWidth;
+        var SCREEN_HEIGHT = window.innerHeight - 2 * MARGIN;
+        var container;
+        var camera, scene, renderer;
+        var materials, current_material;
+        var light, pointLight, ambientLight;
+        var effect, resolution;
+        var composer, effectFXAA, hblur, vblur;
+        var effectController;
+        var time = 0;
+        var clock = new THREE.Clock();
+        init();
+        animate();
 
-        var light = new THREE.PointLight(0xffffff, 2, 100);
+        function init() {
+            container = document.getElementById('container');
+            // CAMERA
+            camera = new THREE.PerspectiveCamera(45, SCREEN_WIDTH / SCREEN_HEIGHT, 1, 10000);
+            camera.position.set(-2500, 500, 3500);
+            // SCENE
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x5200ff);
+            // LIGHTS
+            light = new THREE.DirectionalLight(0xffffff);
+            light.position.set(0.5, 0.5, 1);
+            scene.add(light);
+            pointLight = new THREE.PointLight(0xff3300);
+            pointLight.position.set(0, 0, 100);
+            scene.add(pointLight);
+            ambientLight = new THREE.AmbientLight(0x080808);
+            scene.add(ambientLight);
+            // MATERIALS
+            materials = generateMaterials();
+            current_material = "liquid";
+            // MARCHING CUBES
+            resolution = 48;
+            effect = new THREE.MarchingCubes(resolution, materials[current_material].m, true, true);
+            effect.position.set(0, 200, 0);
+            effect.scale.set(700, 700, 700);
+            effect.enableUvs = false;
+            effect.enableColors = false;
+            scene.add(effect);
+            // RENDERER
+            renderer = new THREE.WebGLRenderer();
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+            renderer.domElement.style.position = "absolute";
+            renderer.domElement.style.top = MARGIN + "px";
+            renderer.domElement.style.left = "0px";
+            container.appendChild(renderer.domElement);
+            //
+            renderer.gammaInput = true;
+            renderer.gammaOutput = true;
+            // CONTROLS
+            var controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.screenSpacePanning = false;
+            controls.enablePan = false;
+            controls.enableZoom = false;
 
-        var geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(vertices), 250, 4, 32, false);
-        var material = new THREE.MeshNormalMaterial();
-
-        var mesh = new THREE.Mesh(geometry, material);
-        mesh.scale.multiplyScalar(2);
-
-        controls = new THREE.OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.25;
-        controls.screenSpacePanning = false;
-        controls.enablePan = false;
-        controls.enableZoom = false;
-
-        scene.add(mesh);
-        scene.add(camera);
-        camera.add(light);
-
-        window.addEventListener('resize', resize, false);
-
-        loop();
-
-        function loop() {
-            requestAnimationFrame(loop);
-            mesh.rotation.y -= 1 / 30;
-            renderer.render(scene, camera);
+            // COMPOSER
+            renderer.autoClear = false;
+            var renderTargetParameters = {
+                minFilter: THREE.LinearFilter,
+                magFilter: THREE.LinearFilter,
+                format: THREE.RGBFormat,
+                stencilBuffer: false
+            };
+            var renderTarget = new THREE.WebGLRenderTarget(SCREEN_WIDTH, SCREEN_HEIGHT, renderTargetParameters);
+            effectFXAA = new THREE.ShaderPass(THREE.FXAAShader);
+            hblur = new THREE.ShaderPass(THREE.HorizontalTiltShiftShader);
+            vblur = new THREE.ShaderPass(THREE.VerticalTiltShiftShader);
+            var bluriness = 8;
+            hblur.uniforms['h'].value = bluriness / SCREEN_WIDTH;
+            vblur.uniforms['v'].value = bluriness / SCREEN_HEIGHT;
+            hblur.uniforms['r'].value = vblur.uniforms['r'].value = 0.5;
+            effectFXAA.uniforms['resolution'].value.set(1 / SCREEN_WIDTH, 1 / SCREEN_HEIGHT);
+            var renderModel = new THREE.RenderPass(scene, camera);
+            vblur.renderToScreen = true;
+            //effectFXAA.renderToScreen = true;
+            composer = new THREE.EffectComposer(renderer, renderTarget);
+            composer.addPass(renderModel);
+            composer.addPass(effectFXAA);
+            composer.addPass(hblur);
+            composer.addPass(vblur);
+            // GUI
+            setupGui();
+            // EVENTS
+            window.addEventListener('resize', onWindowResize, false);
         }
-
-        function resize() {
-            width = window.innerWidth;
-            height = window.innerHeight;
-            renderer.setSize(width, height);
-            camera.aspect = width / height;
+        //
+        function onWindowResize() {
+            SCREEN_WIDTH = window.innerWidth;
+            SCREEN_HEIGHT = window.innerHeight - 2 * MARGIN;
+            camera.aspect = SCREEN_WIDTH / SCREEN_HEIGHT;
             camera.updateProjectionMatrix();
-
+            renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+            composer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+            hblur.uniforms['h'].value = 4 / SCREEN_WIDTH;
+            vblur.uniforms['v'].value = 4 / SCREEN_HEIGHT;
+            effectFXAA.uniforms['resolution'].value.set(1 / SCREEN_WIDTH, 1 / SCREEN_HEIGHT);
         }
 
-        function EasingQuadraticIn(k) {
-            return k * k;
+        function generateMaterials() {
+            // environment map
+            //            var path = "textures/cube/SwedishRoyalCastle/";
+            //            var format = '.jpg';
+            //            var urls = [
+            //                path + 'px' + format, path + 'nx' + format,
+            //                path + 'py' + format, path + 'ny' + format,
+            //                path + 'pz' + format, path + 'nz' + format
+            //            ];
+            //            var cubeTextureLoader = new THREE.CubeTextureLoader();
+            //            var reflectionCube = cubeTextureLoader.load(urls);
+            //            reflectionCube.format = THREE.RGBFormat;
+            //            var refractionCube = cubeTextureLoader.load(urls);
+            //            reflectionCube.format = THREE.RGBFormat;
+            //            refractionCube.mapping = THREE.CubeRefractionMapping;
+            // toons
+            var toonMaterial1 = createShaderMaterial("toon1", light, ambientLight),
+                toonMaterial2 = createShaderMaterial("toon2", light, ambientLight),
+                hatchingMaterial = createShaderMaterial("hatching", light, ambientLight),
+                hatchingMaterial2 = createShaderMaterial("hatching", light, ambientLight),
+                dottedMaterial = createShaderMaterial("dotted", light, ambientLight),
+                dottedMaterial2 = createShaderMaterial("dotted", light, ambientLight);
+            hatchingMaterial2.uniforms["uBaseColor"].value.setRGB(0, 0, 0);
+            hatchingMaterial2.uniforms["uLineColor1"].value.setHSL(0, 0.8, 0.5);
+            hatchingMaterial2.uniforms["uLineColor2"].value.setHSL(0, 0.8, 0.5);
+            hatchingMaterial2.uniforms["uLineColor3"].value.setHSL(0, 0.8, 0.5);
+            hatchingMaterial2.uniforms["uLineColor4"].value.setHSL(0.1, 0.8, 0.5);
+            dottedMaterial2.uniforms["uBaseColor"].value.setRGB(0, 0, 0);
+            dottedMaterial2.uniforms["uLineColor1"].value.setHSL(0.05, 1.0, 0.5);
+            //            var texture = new THREE.TextureLoader().load("textures/UV_Grid_Sm.jpg");
+            //            texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+            var materials = {
+                "liquid": {
+                    m: new THREE.MeshNormalMaterial(),
+                    h: 0,
+                    s: 0,
+                    l: 1
+                }
+            };
+            return materials;
         }
 
-        function seat(t) {
-            return (Math.pow(2 * t - 1, 3) + 1) / 2;
+        function createShaderMaterial(id, light, ambientLight) {
+            var shader = THREE.ShaderToon[id];
+            var u = THREE.UniformsUtils.clone(shader.uniforms);
+            var vs = shader.vertexShader;
+            var fs = shader.fragmentShader;
+            var material = new THREE.ShaderMaterial({
+                uniforms: u,
+                vertexShader: vs,
+                fragmentShader: fs
+            });
+            material.uniforms["uDirLightPos"].value = light.position;
+            material.uniforms["uDirLightColor"].value = light.color;
+            material.uniforms["uAmbientLightColor"].value = ambientLight.color;
+            return material;
+        }
+        //
+        function setupGui() {
+            var createHandler = function(id) {
+                return function() {
+                    var mat_old = materials[current_material];
+                    mat_old.h = m_h.getValue();
+                    mat_old.s = m_s.getValue();
+                    mat_old.l = m_l.getValue();
+                    current_material = id;
+                    var mat = materials[id];
+                    effect.material = mat.m;
+                    m_h.setValue(mat.h);
+                    m_s.setValue(mat.s);
+                    m_l.setValue(mat.l);
+                    effect.enableUvs = (current_material === "textured") ? true : false;
+                    effect.enableColors = (current_material === "colors") ? true : false;
+                };
+            };
+            effectController = {
+//                material: "shiny",
+                speed: 1.0,
+                numBlobs: 10,
+                resolution: 48,
+                isolation: 80,
+                floor: true,
+                wallx: false,
+                wallz: false,
+                hue: 0.0,
+                saturation: 0.8,
+                lightness: 0.1,
+                lhue: 0.04,
+                lsaturation: 1.0,
+                llightness: 0.5,
+                lx: 0.5,
+                ly: 0.5,
+                lz: 1.0,
+                postprocessing: false,
+                dummy: function() {}
+            };
+        }
+        
+        // this controls content of marching cubes voxel field
+        function updateCubes(object, time, numblobs, floor, wallx, wallz) {
+            object.reset();
+            // fill the field with some metaballs
+            var i, ballx, bally, ballz, subtract, strength;
+            subtract = 12;
+            strength = 1.2 / ((Math.sqrt(numblobs) - 1) / 4 + 1);
+            for (i = 0; i < numblobs; i++) {
+                ballx = Math.sin(i + 1.26 * time * (1.03 + 0.5 * Math.cos(0.21 * i))) * 0.27 + 0.5;
+                bally = Math.abs(Math.cos(i + 1.12 * time * Math.cos(1.22 + 0.1424 * i))) * 0.77; // dip into the floor
+                ballz = Math.cos(i + 1.32 * time * 0.1 * Math.sin((0.92 + 0.53 * i))) * 0.27 + 0.5;
+                object.addBall(ballx, bally, ballz, strength, subtract);
+            }
+            if (floor) object.addPlaneY(2, 12);
+            if (wallz) object.addPlaneZ(2, 12);
+            if (wallx) object.addPlaneX(2, 12);
+        }
+        //
+        function animate() {
+            requestAnimationFrame(animate);
+            render();
         }
 
+        function render() {
+            var delta = clock.getDelta();
+            time += delta * effectController.speed * 0.5;
+            // marching cubes
+            if (effectController.resolution !== resolution) {
+                resolution = effectController.resolution;
+                effect.init(Math.floor(resolution));
+            }
+            if (effectController.isolation !== effect.isolation) {
+                effect.isolation = effectController.isolation;
+            }
+            updateCubes(effect, time, effectController.numBlobs, effectController.floor, effectController.wallx, effectController.wallz);
+            // materials
+            if (effect.material instanceof THREE.ShaderMaterial) {
+                if (current_material === "dotted2") {
+                    effect.material.uniforms["uLineColor1"].value.setHSL(effectController.hue, effectController.saturation, effectController.lightness);
+                } else if (current_material === "hatching2") {
+                    var u = effect.material.uniforms;
+                    u.uLineColor1.value.setHSL(effectController.hue, effectController.saturation, effectController.lightness);
+                    u.uLineColor2.value.setHSL(effectController.hue, effectController.saturation, effectController.lightness);
+                    u.uLineColor3.value.setHSL(effectController.hue, effectController.saturation, effectController.lightness);
+                    u.uLineColor4.value.setHSL((effectController.hue + 0.2 % 1.0), effectController.saturation, effectController.lightness);
+                } else {
+                    effect.material.uniforms["uBaseColor"].value.setHSL(effectController.hue, effectController.saturation, effectController.lightness);
+                }
+            }
+            // lights
+            light.position.set(effectController.lx, effectController.ly, effectController.lz);
+            light.position.normalize();
+            pointLight.color.setHSL(effectController.lhue, effectController.lsaturation, effectController.llightness);
+            // render
+            if (effectController.postprocessing) {
+                composer.render(delta);
+            } else {
+                renderer.clear();
+                renderer.render(scene, camera);
+            }
+        }
     </script>
+
+
 
     <div class="ctrl">
         <a class="prev" href="../4">&#60;</a>
