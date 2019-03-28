@@ -1,0 +1,146 @@
+<html>
+
+<head>
+    <title>Dream 10</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <link rel="shortcut icon" href="../asset/favicon.ico" />
+    <link rel="apple-touch-icon" href="../asset/favicon.png" />
+    <link rel="stylesheet" type="text/css" href="../src/style/style.css">
+</head>
+
+<body>
+    <script src="../src/build/three.js"></script>
+    <script src="../src/control/OrbitControls.js"></script>
+    <script src="../src/js/Detector.js"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/gsap/2.0.2/TweenMax.min.js'></script>
+
+    <script>
+        if (!Detector.webgl) Detector.addGetWebGLMessage();
+
+        var scene, camera, control, renderer;
+
+        const nbTrucs = 1;
+        const nbObjects = 25,
+            objectMinRadius = 1,
+            objectRadiusCoef = 1.5,
+            objectThickness = 0.5,
+            objectDepth = 0.5;
+        const animationDuration = 9,
+            animationDelay = 0.1;
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 1, 1000);
+
+            control = new THREE.OrbitControls(camera);
+            control.screenSpacePanning = false;
+            control.enablePan = false;
+            control.enableZoom = false;
+            control.autoRotate = true;
+            control.autoRotateSpeed = 5;
+
+            renderer = new THREE.WebGLRenderer({
+                antialias: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            initScene();
+
+            window.addEventListener('resize', onWindowResize, false);
+
+            animate();
+        };
+
+        function initScene() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x5200ff);
+            camera.position.z = 240;
+
+            for (var i = 0; i < nbTrucs; i++) {
+                var truc = new Truc();
+                scene.add(truc.o3d);
+            }
+        }
+
+
+        function animate() {
+            requestAnimationFrame(animate);
+            control.update();
+            renderer.render(scene, camera);
+        };
+
+        function Truc() {
+            this.init();
+        }
+
+        Truc.prototype.init = function() {
+            this.o3d = new THREE.Object3D();
+            var material = new THREE.MeshNormalMaterial();
+
+            for (var i = 0; i < nbObjects; i++) {
+                var geometry = triangleGeometry(objectMinRadius + objectRadiusCoef * i, objectThickness, objectDepth);
+                var mesh = new THREE.Mesh(geometry, material);
+
+                TweenMax.to(mesh.rotation, animationDuration, {
+                    // x: Math.PI * 2,
+                    y: Math.PI * 2,
+                    z: Math.PI * 2,
+                    ease: Power1.easeInOut,
+                    repeat: -1,
+                    yoyo: true,
+                    delay: i * animationDelay
+                });
+
+                this.o3d.add(mesh);
+            }
+        };
+
+        function triangleGeometry(radius, thickness, depth) {
+            var shape = new THREE.Shape();
+            var r = radius + thickness;
+            var y = Math.sin(-Math.PI / 6) * r;
+            var x = Math.cos(Math.PI / 6) * r;
+            shape.moveTo(0, r);
+            shape.lineTo(-x, y);
+            shape.lineTo(x, y);
+            shape.lineTo(0, r);
+
+            var hole = new THREE.Path();
+            r = radius;
+            y = Math.sin(-Math.PI / 6) * r;
+            x = Math.cos(Math.PI / 6) * r;
+            hole.moveTo(0, r);
+            hole.lineTo(-x, y);
+            hole.lineTo(x, y);
+            hole.lineTo(0, r);
+
+            shape.holes.push(hole);
+
+            var extrudeSettings = {
+                steps: 1,
+                depth: depth,
+                bevelEnabled: false
+            };
+            var geometry = new THREE.ExtrudeBufferGeometry(shape, extrudeSettings);
+            geometry.translate(0, 0, -depth / 2);
+            return geometry;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        init();
+    </script>
+
+    <div class="ctrl">
+        <a class="prev" href="../9">&#60;</a>
+        <a class="home" href="/">&#9711;</a>
+        <a class="next" href="../11">&#62;</a>
+    </div>
+</body>
+
+</html>

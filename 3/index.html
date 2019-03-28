@@ -37,7 +37,7 @@
 
 
             var loader = new THREE.GLTFLoader();
-            loader.load('../src/model/LeePerrySmith/LeePerrySmith.glb', function(gltf) {
+            loader.load('../asset/model/LeePerrySmith/LeePerrySmith.glb', function(gltf) {
                 gltf.scene.traverse(function(node) {
                     if (node.isMesh) mesh = node;
                 });

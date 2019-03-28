@@ -26,10 +26,10 @@ class App {
     }
 
     init() {
-        
-        this.scene = new THREE.Scene();        
 
-        this.camera = new THREE.PerspectiveCamera(25, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.scene = new THREE.Scene();
+
+        this.camera = new THREE.PerspectiveCamera(25, window.innerWidth / window.innerHeight, 1, 1000);
         this.camera.position.x = -90; //-60
         this.camera.position.y = 20;
         this.camera.position.z = -120;
@@ -40,8 +40,7 @@ class App {
         this.controls.enablePan = false;
         this.controls.enableZoom = false;
 
-        this.resizeListener = e => this.onResize(e);
-        window.addEventListener('resize', this.resizeListener, false);
+        window.addEventListener('resize', this.onResize.bind(this), false);
 
         this.createBoxes();
 

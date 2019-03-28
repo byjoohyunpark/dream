@@ -255,7 +255,6 @@ if (!Detector.webgl) Detector.addGetWebGLMessage();
     }, {
          key: 'bindEvents',
          value: function bindEvents()
-
          {
              window.addEventListener('resize', this.resizeHandler.bind(this));
          }
