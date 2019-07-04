@@ -1,0 +1,42 @@
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    font-family: 'HelveticaNeue-UltraLight', 'Helvetica Neue UltraLight', 'Helvetica Neue', Arial, Helvetica, sans-serif;
+    font-size: 24px;
+}
+
+.ctrl {
+    z-index: 200;
+    color: white;
+    cursor: default;
+}
+
+.prev {
+    position: absolute;
+    left: 3%;
+    bottom: 2%;
+}
+
+.home {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 2%;
+    font-size: 0.8em;
+    font-weight: 100;
+}
+
+.next {
+    position: absolute;
+    right: 3%;
+    bottom: 2%;
+}
+
+a,
+a:link,
+a:visited {
+    text-decoration: none;
+    color: white;
+    cursor: default;
+}
