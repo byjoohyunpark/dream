@@ -1,5 +1,5 @@
 # Dream Series
-Collection of personal experiments with three.js and shader. A space of random visual and interaction viewing browser as a digital canvas. <br>
+Collection of personal experiments with three.js and 3d objects. <br/>
 [Project link](https://byjoohyunpark.github.io/dream/)
 
 
